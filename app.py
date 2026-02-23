@@ -269,7 +269,7 @@ with st.sidebar:
             <img src="data:image/png;base64,{bot_logo}" style="width: 70px; margin-bottom: 10px;">
             <div style="font-size: 1.6rem; font-weight: 800; color: #064E3B;">Askgiraffe</div>
             <div style="font-size: 0.95rem; color: #374151; font-weight: 500; margin-top: 5px;">
-                ผู้ช่วยหลักสูตรคณะครุศาสตร์ฯ มจพ.
+                ผู้ช่วยตอบคำถามภาคคอม & โยธา
             </div>
         </div>
     """, unsafe_allow_html=True)
