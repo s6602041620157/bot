@@ -10,7 +10,7 @@ from rag.pipeline import RAGPipeline
 
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(
-    page_title="Askgiraffe - ผู้ช่วยหลักสูตรคณะครุศาสตร์อุตสาหกรรม", 
+    page_title="Askgiraffe - ผู้ช่วยคำถามภาควิชาคอมพิวเตอร์ศึกษาและภาควิชาครุศาสตร์โยธา", 
     page_icon="Askgiraffe.png",
     layout="wide"
 )
@@ -334,7 +334,7 @@ if len(st.session_state["messages"]) == 0:
         <div class="welcome-stage">
             <div class="welcome-card">
                 <div style="color: #047857; font-size: 2.2rem; font-weight: 800; margin-bottom: 0.75rem;">สวัสดีครับ 👋 ยินดีต้อนรับสู่ Askgiraffe</div>
-                <p style="color: #1F2937; font-size: 1.1rem; font-weight: 500;">ผมพร้อมช่วยตอบคำถามเกี่ยวกับหลักสูตรคณะครุศาสตร์อุตสาหกรรม มจพ.<br>พิมพ์คำถามของคุณได้เลย แล้วผมจะช่วยค้นหาคำตอบให้อย่างรวดเร็ว</p>
+                <p style="color: #1F2937; font-size: 1.1rem; font-weight: 500;">ผมพร้อมช่วยตอบคำถามเกี่ยวภาควิชาคอมพิวเตอร์ศึกษาและภาควิชาครุศาสตร์โยธา<br>พิมพ์คำถามของคุณได้เลย แล้วผมจะช่วยค้นหาคำตอบให้อย่างรวดเร็ว</p>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -346,7 +346,7 @@ if len(st.session_state["messages"]) == 0:
 else:
     # Header
     st.markdown(f'<div class="main-header"><img src="data:image/png;base64,{bot_logo}" style="width: 80px; vertical-align: middle; margin-right: 15px;"> Askgiraffe</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">ผู้ช่วยให้คำปรึกษาหลักสูตร คณะครุศาสตร์อุตสาหกรรม มจพ.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">ผู้ช่วยของภาควิชาคอมพิวเตอร์ศึกษาและภาควิชาครุศาสตร์โยธา</div>', unsafe_allow_html=True)
     st.markdown('<h3 style="color: #059669; font-weight: 600; border-left: 5px solid #10B981; padding-left: 15px;">💬 พื้นที่แชท</h3>', unsafe_allow_html=True)
 
     # Chat History
