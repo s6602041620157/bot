@@ -39,6 +39,11 @@ st.markdown(f"""
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"] {{
         font-family: var(--font-main) !important;
     }}
+    [data-testid="stIconMaterial"] {{
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined", sans-serif !important;
+        font-variant-ligatures: normal !important;
+        line-height: 1 !important;
+    }}
 
     /* Background Setup */
     .stApp {{
@@ -231,7 +236,6 @@ def get_pipeline() -> RAGPipeline:
 
 _markdown_renderer = MarkdownIt("commonmark", {"html": False, "breaks": True})
 
-
 def render_chat_bubble(message: dict[str, object]) -> None:
     role = "user" if str(message.get("role", "")) == "user" else "assistant"
     label = "ผู้ถาม" if role == "user" else "Askgiraffe"
@@ -269,7 +273,7 @@ with st.sidebar:
             <img src="data:image/png;base64,{bot_logo}" style="width: 70px; margin-bottom: 10px;">
             <div style="font-size: 1.6rem; font-weight: 800; color: #064E3B;">Askgiraffe</div>
             <div style="font-size: 0.95rem; color: #374151; font-weight: 500; margin-top: 5px;">
-                ผู้ช่วยตอบคำถามภาคคอม & โยธา
+                ผู้ช่วยตอบคำถามภาควิชาคอมพิวเตอร์ศึกษาและ<div>ภาควิชาครุศาสตร์โยธา คณะครุศาสตร์อุตสาหกรรม มจพ.</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
