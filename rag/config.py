@@ -38,6 +38,9 @@ class Settings:
     gen_retry_on_refusal: int = 1
     auto_heal_index: bool = True
     auto_heal_min_docs: int = 1
+    topic_change_threshold: float = 0.3
+    max_history_for_new_topic: int = 2
+    topic_isolation_enabled: bool = True
 
     def ensure_paths(self) -> None:
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
@@ -75,6 +78,9 @@ def load_settings() -> Settings:
         gen_retry_on_refusal=max(0, int(os.getenv("GEN_RETRY_ON_REFUSAL", "1"))),
         auto_heal_index=_env_bool(os.getenv("AUTO_HEAL_INDEX"), default=True),
         auto_heal_min_docs=max(1, int(os.getenv("AUTO_HEAL_MIN_DOCS", "1"))),
+        topic_change_threshold=float(os.getenv("TOPIC_CHANGE_THRESHOLD", "0.3")),
+        max_history_for_new_topic=int(os.getenv("MAX_HISTORY_FOR_NEW_TOPIC", "2")),
+        topic_isolation_enabled=_env_bool(os.getenv("TOPIC_ISOLATION_ENABLED"), default=True),
     )
     settings.ensure_paths()
     return settings

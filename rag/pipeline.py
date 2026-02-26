@@ -119,8 +119,8 @@ class RAGPipeline:
             return []
         return self.qa_fallback.retrieve(query=query, top_k=top_k)
 
-    def judge_relevance(self, query: str, chunks: list[RetrievedChunk]) -> GateDecision:
-        return self.relevance_gate.judge_relevance(query=query, chunks=chunks)
+    def judge_relevance(self, query: str, chunks: list[RetrievedChunk], history: list[dict] = None) -> GateDecision:
+        return self.relevance_gate.judge_relevance(query=query, chunks=chunks, history=history)
 
     def generate_answer(
         self,
@@ -151,7 +151,7 @@ class RAGPipeline:
             qa_scored: list[RetrievedChunk] = []
 
             if scored:
-                decision = self.judge_relevance(query=query, chunks=scored)
+                decision = self.judge_relevance(query=query, chunks=scored, history=history)
                 if decision.is_relevant and decision.confidence >= self.settings.gate_conf_threshold:
                     selected = self._select_from_decision(scored, decision)
                     initial_route = "normal"
@@ -183,6 +183,7 @@ class RAGPipeline:
                         initial_route=initial_route,
                         final_route=final_route,
                         retry_count=retry_count,
+                        history=history,
                     )
                     return answer
 
@@ -206,6 +207,7 @@ class RAGPipeline:
                         initial_route=initial_route,
                         final_route=final_route,
                         retry_count=retry_count,
+                        history=history,
                     )
                     return answer
 
@@ -245,6 +247,7 @@ class RAGPipeline:
                 initial_route=initial_route,
                 final_route=final_route,
                 retry_count=retry_count,
+                history=history,
             )
             return answer
 
@@ -395,6 +398,7 @@ class RAGPipeline:
         initial_route: str,
         final_route: str,
         retry_count: int,
+        history: list[dict] = None,
     ) -> None:
         index_stats = self.get_index_stats()
         route_status = "refusal_recovered" if initial_route != final_route and not answer.refusal else (
@@ -403,7 +407,8 @@ class RAGPipeline:
         self.logger.info(
             (
                 "initial_route=%s final_route=%s route_status=%s query=%s elapsed_ms=%.2f retry_count=%s "
-                "index_stats=%s retrieved_ids=%s scores=%s qa_ids=%s qa_scores=%s gate=%s refusal=%s"
+                "index_stats=%s retrieved_ids=%s scores=%s qa_ids=%s qa_scores=%s gate=%s refusal=%s "
+                "history_length=%s"
             ),
             initial_route,
             final_route,
@@ -418,6 +423,7 @@ class RAGPipeline:
             [round(r.score, 4) for r in qa_retrieved],
             decision,
             answer.refusal,
+            len(history) if history else 0,
         )
 
 

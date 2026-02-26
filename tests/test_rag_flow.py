@@ -57,7 +57,7 @@ class FakeGate:
     def __init__(self, decision: GateDecision) -> None:
         self.decision = decision
 
-    def judge_relevance(self, query: str, chunks: list[RetrievedChunk]) -> GateDecision:
+    def judge_relevance(self, query: str, chunks: list[RetrievedChunk], history: list[dict] = None) -> GateDecision:
         return self.decision
 
 

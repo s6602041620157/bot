@@ -7,6 +7,7 @@ from html import escape
 from markdown_it import MarkdownIt
 from rag.config import load_settings
 from rag.pipeline import RAGPipeline
+import numpy as np
 
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(
@@ -256,9 +257,67 @@ def render_chat_bubble(message: dict[str, object]) -> None:
     )
 
 
-def _recent_history(messages: list[dict], turns: int) -> list[dict]:
+def _detect_topic_change(current_query: str, recent_messages: list[dict], threshold: float = 0.3) -> bool:
+    """Detect if current query represents a topic change from recent conversation."""
+    if not recent_messages:
+        return False
+    
+    pipeline = get_pipeline()
+    
+    user_messages = [msg["content"] for msg in recent_messages if msg.get("role") == "user"]
+    if not user_messages:
+        return False
+    
+    try:
+        current_embedding = pipeline.embedder.embed_texts([current_query])[0]
+        recent_embeddings = pipeline.embedder.embed_texts(user_messages)
+        
+        max_similarity = 0.0
+        for embedding in recent_embeddings:
+            similarity = np.dot(current_embedding, embedding) / (
+                np.linalg.norm(current_embedding) * np.linalg.norm(embedding)
+            )
+            max_similarity = max(max_similarity, similarity)
+        
+        is_topic_change = max_similarity < threshold
+        
+        pipeline.logger.info(
+            f"topic_detection query='{current_query[:50]}...' max_similarity={max_similarity:.3f} "
+            f"threshold={threshold} topic_change={is_topic_change} recent_queries={len(user_messages)}"
+        )
+        
+        return is_topic_change
+        
+    except Exception as e:
+        pipeline.logger.warning(f"topic_detection_error query='{current_query[:50]}...' error={str(e)}")
+        return False
+
+
+def _recent_history(messages: list[dict], turns: int, current_query: str = "", settings=None) -> list[dict]:
+    """Get recent history with topic change detection."""
+    if not settings or not settings.topic_isolation_enabled:
+        max_messages = max(1, turns * 2)
+        return [{"role": msg["role"], "content": msg["content"]} for msg in messages if msg.get("role") in {"user", "assistant"}][-max_messages:]
+    
+    if not messages:
+        return []
+    
+    relevant_messages = [{"role": msg["role"], "content": msg["content"]} for msg in messages if msg.get("role") in {"user", "assistant"}]
+    
+    if current_query and _detect_topic_change(current_query, relevant_messages[-4:], settings.topic_change_threshold):
+        max_messages = min(settings.max_history_for_new_topic * 2, len(relevant_messages))
+        selected_history = relevant_messages[-max_messages:]
+        
+        pipeline = get_pipeline()
+        pipeline.logger.info(
+            f"topic_isolation_applied query='{current_query[:50]}...' "
+            f"history_reduced_to={len(selected_history)} from={len(relevant_messages)}"
+        )
+        
+        return selected_history
+    
     max_messages = max(1, turns * 2)
-    return [{"role": msg["role"], "content": msg["content"]} for msg in messages if msg.get("role") in {"user", "assistant"}][-max_messages:]
+    return relevant_messages[-max_messages:]
 
 # --- 5. SIDEBAR (ปรับปรุงให้สวยงามและอ่านง่าย) ---
 settings = load_settings()
@@ -368,7 +427,7 @@ if st.session_state["messages"] and st.session_state["messages"][-1]["role"] == 
     last_query = st.session_state["messages"][-1]["content"]
     with st.spinner('🤔 กำลังวิเคราะห์ข้อมูลและหาคำตอบ...'):
         try:
-            history = _recent_history(st.session_state["messages"][:-1], turns=settings.memory_turns)
+            history = _recent_history(st.session_state["messages"][:-1], turns=settings.memory_turns, current_query=last_query, settings=settings)
             result = pipeline.ask(query=last_query, history=history)
             st.session_state["messages"].append({
                 "role": "assistant", 
