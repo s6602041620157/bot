@@ -62,7 +62,7 @@ class LLMRelevanceGate:
         self.temperature = temperature
         self.top_p = top_p
 
-    def judge_relevance(self, query: str, chunks: list[RetrievedChunk], history: list[dict] = None) -> GateDecision:
+    def judge_relevance(self, query: str, chunks: list[RetrievedChunk]) -> GateDecision:
         if not chunks:
             return GateDecision(
                 is_relevant=False,
@@ -78,21 +78,13 @@ class LLMRelevanceGate:
                 f"- id={chunk.chunk_id} | file={chunk.file_name} | page={chunk.page} | score={chunk.score:.3f} | text={snippet}"
             )
 
-        history_context = ""
-        if history:
-            recent_queries = [msg["content"] for msg in history if msg.get("role") == "user"][-2:]
-            if recent_queries:
-                history_context = f"\nRecent conversation context:\n" + "\n".join(f"- {q}" for q in recent_queries) + "\n"
-
         prompt = (
             "You are a strict relevance judge for Retrieval-Augmented Generation. "
-            "Assess whether the provided evidence is sufficient to answer the CURRENT user query. "
-            "Be extra strict if the query seems unrelated to recent conversation context. "
+            "Assess whether the provided evidence is sufficient to answer the user query. "
             "Return JSON only with schema: "
             "{\"is_relevant\": bool, \"confidence\": float (0-1), \"reason\": str, \"kept_chunk_ids\": list[str]}. "
-            "If evidence is not sufficient or if this is a completely new topic requiring fresh start, set is_relevant=false and keep list empty or minimal.\n\n"
-            f"{history_context}"
-            f"Current Query:\n{query}\n\n"
+            "If evidence is not sufficient, set is_relevant=false and keep list empty or minimal.\n\n"
+            f"Query:\n{query}\n\n"
             "Candidate chunks:\n"
             + "\n".join(context_lines)
         )
@@ -104,9 +96,6 @@ class LLMRelevanceGate:
         )
         text = _response_text(response)
         decision = parse_gate_response_json(text)
-
-        if history and len(history) > 4:
-            decision.confidence = max(0.0, decision.confidence - 0.1)
 
         valid_ids = {c.chunk_id for c in chunks}
         decision.kept_chunk_ids = [cid for cid in decision.kept_chunk_ids if cid in valid_ids]

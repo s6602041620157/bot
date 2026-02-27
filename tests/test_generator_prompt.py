@@ -22,9 +22,9 @@ def test_build_prompt_partial_mode_contains_required_sections() -> None:
         mode="partial",
         style_policy="auto",
     )
-    assert "โหมด Partial" in prompt
-    assert "ข้อมูลบางส่วนที่เกี่ยวข้อง" in prompt
-    assert "คำแนะนำสำหรับการถามคำถามเพิ่มเติม" in prompt
+    assert "## ข้อมูลที่พบ" in prompt
+    assert "## คำถามแนะนำต่อ" in prompt
+    assert "## สิ่งที่ยังไม่ชัดเจน" not in prompt
 
 
 def test_build_prompt_auto_style_contains_format_rules() -> None:
