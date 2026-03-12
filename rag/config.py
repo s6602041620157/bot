@@ -19,7 +19,7 @@ class Settings:
     embed_model: str = "gemini-embedding-001"
     pdf_dir: Path = Path("data/pdfs")
     chroma_dir: Path = Path("storage/chroma")
-    top_k: int = 12
+    top_k: int = 8
     sim_threshold: float = 0.55
     gate_conf_threshold: float = 0.65
     collection_name: str = "pdf_rag_chunks"
@@ -35,9 +35,11 @@ class Settings:
     memory_turns: int = 6
     llm_temperature: float = 0.0
     llm_top_p: float = 1.0
-    gen_retry_on_refusal: int = 1
+    gen_retry_on_refusal: int = 0
     auto_heal_index: bool = True
     auto_heal_min_docs: int = 1
+    skip_llm_gate: bool = False
+    gate_skip_score: float = 0.75
 
     def ensure_paths(self) -> None:
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +58,7 @@ def load_settings() -> Settings:
         embed_model=os.getenv("EMBED_MODEL", "gemini-embedding-001").strip(),
         pdf_dir=Path(os.getenv("PDF_DIR", "data/pdfs")),
         chroma_dir=Path(os.getenv("CHROMA_DIR", "storage/chroma")),
-        top_k=int(os.getenv("TOP_K", "12")),
+        top_k=int(os.getenv("TOP_K", "8")),
         sim_threshold=float(os.getenv("SIM_THRESHOLD", "0.55")),
         gate_conf_threshold=float(os.getenv("GATE_CONF_THRESHOLD", "0.65")),
         collection_name=os.getenv("CHROMA_COLLECTION", "pdf_rag_chunks").strip(),
@@ -72,9 +74,11 @@ def load_settings() -> Settings:
         memory_turns=int(os.getenv("MEMORY_TURNS", "6")),
         llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.0")),
         llm_top_p=float(os.getenv("LLM_TOP_P", "1.0")),
-        gen_retry_on_refusal=max(0, int(os.getenv("GEN_RETRY_ON_REFUSAL", "1"))),
+        gen_retry_on_refusal=max(0, int(os.getenv("GEN_RETRY_ON_REFUSAL", "0"))),
         auto_heal_index=_env_bool(os.getenv("AUTO_HEAL_INDEX"), default=True),
         auto_heal_min_docs=max(1, int(os.getenv("AUTO_HEAL_MIN_DOCS", "1"))),
+        skip_llm_gate=_env_bool(os.getenv("SKIP_LLM_GATE"), default=False),
+        gate_skip_score=float(os.getenv("GATE_SKIP_SCORE", "0.75")),
     )
     settings.ensure_paths()
     return settings

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Generator
 
 from .chunker import build_document_chunks
 from .config import REFUSAL_MESSAGE, Settings, load_settings
@@ -137,6 +138,23 @@ class RAGPipeline:
             style_policy=self.settings.answer_style_policy,
         )
 
+    def _should_skip_gate(self, scored: list[RetrievedChunk]) -> bool:
+        """Return True if LLM gate can be skipped (disabled or top scores high enough)."""
+        if self.settings.skip_llm_gate:
+            return True
+        if scored and scored[0].score >= self.settings.gate_skip_score:
+            return True
+        return False
+
+    def _make_skip_decision(self, scored: list[RetrievedChunk]) -> GateDecision:
+        """Create a GateDecision that passes without calling the LLM gate."""
+        return GateDecision(
+            is_relevant=True,
+            confidence=1.0,
+            reason="gate_skipped_high_score",
+            kept_chunk_ids=[c.chunk_id for c in scored[:5]],
+        )
+
     def ask(self, query: str, history: list[dict]) -> RAGAnswer:
         with self._lock:
             start_time = time.perf_counter()
@@ -145,13 +163,24 @@ class RAGPipeline:
             decision: GateDecision | None = None
             retry_count = 0
 
-            retrieved = self.retrieve(query=query, top_k=self.settings.top_k)
+            # Parallel PDF + QA retrieval
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                pdf_future = executor.submit(self.retrieve, query=query, top_k=self.settings.top_k)
+                qa_future = executor.submit(self.retrieve_qa_fallback, query=query, top_k=self.settings.qa_top_k)
+                retrieved = pdf_future.result()
+                qa_retrieved_raw = qa_future.result()
+
             scored = apply_score_gate(retrieved, threshold=self.settings.sim_threshold)
-            qa_retrieved: list[RetrievedChunk] = []
+            qa_retrieved: list[RetrievedChunk] = qa_retrieved_raw
             qa_scored: list[RetrievedChunk] = []
 
             if scored:
-                decision = self.judge_relevance(query=query, chunks=scored)
+                # Skip LLM gate when scores are high enough or gate is disabled
+                if self._should_skip_gate(scored):
+                    decision = self._make_skip_decision(scored)
+                else:
+                    decision = self.judge_relevance(query=query, chunks=scored)
+
                 if decision.is_relevant and decision.confidence >= self.settings.gate_conf_threshold:
                     selected = self._select_from_decision(scored, decision)
                     initial_route = "normal"
@@ -209,7 +238,6 @@ class RAGPipeline:
                     )
                     return answer
 
-            qa_retrieved = self.retrieve_qa_fallback(query=query, top_k=self.settings.qa_top_k)
             qa_scored = apply_score_gate(qa_retrieved, threshold=self.settings.qa_sim_threshold)
             if qa_scored:
                 initial_route = "fallback"
@@ -247,6 +275,87 @@ class RAGPipeline:
                 retry_count=retry_count,
             )
             return answer
+
+    def ask_stream(self, query: str, history: list[dict]) -> Generator[str, None, None]:
+        """Streaming version of ask(). Yields text chunks as they arrive."""
+        with self._lock:
+            start_time = time.perf_counter()
+            decision: GateDecision | None = None
+
+            # Parallel PDF + QA retrieval
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                pdf_future = executor.submit(self.retrieve, query=query, top_k=self.settings.top_k)
+                qa_future = executor.submit(self.retrieve_qa_fallback, query=query, top_k=self.settings.qa_top_k)
+                retrieved = pdf_future.result()
+                qa_retrieved_raw = qa_future.result()
+
+            scored = apply_score_gate(retrieved, threshold=self.settings.sim_threshold)
+            qa_retrieved: list[RetrievedChunk] = qa_retrieved_raw
+
+            chunks_to_use: list[RetrievedChunk] = []
+            mode = "normal"
+
+            if scored:
+                if self._should_skip_gate(scored):
+                    decision = self._make_skip_decision(scored)
+                else:
+                    decision = self.judge_relevance(query=query, chunks=scored)
+
+                if decision.is_relevant and decision.confidence >= self.settings.gate_conf_threshold:
+                    chunks_to_use = self._select_from_decision(scored, decision)
+                    mode = "normal"
+                elif self._can_partial_answer(scored):
+                    chunks_to_use = self._select_partial_chunks(scored)
+                    mode = "partial"
+
+            if not chunks_to_use:
+                qa_scored = apply_score_gate(qa_retrieved, threshold=self.settings.qa_sim_threshold)
+                if qa_scored:
+                    chunks_to_use = qa_scored[:5]
+                    mode = "fallback"
+
+            if not chunks_to_use:
+                yield REFUSAL_MESSAGE
+                return
+
+            # Stream the answer
+            stream = self.generator.generate_answer_stream(
+                query=query,
+                chunks=chunks_to_use,
+                history=history,
+                mode=mode,
+                style_policy=self.settings.answer_style_policy,
+            )
+
+            collected: list[str] = []
+            try:
+                while True:
+                    text_chunk = next(stream)
+                    collected.append(text_chunk)
+                    yield text_chunk
+            except StopIteration as e:
+                rag_answer = e.value
+            except Exception:
+                full_text = "".join(collected).strip() or REFUSAL_MESSAGE
+                refusal = full_text == REFUSAL_MESSAGE
+                rag_answer = RAGAnswer(
+                    answer_text=full_text,
+                    citations=chunks_to_use,
+                    grounded=not refusal,
+                    refusal=refusal,
+                )
+
+            self._log_query(
+                query=query,
+                retrieved=retrieved,
+                qa_retrieved=qa_retrieved,
+                decision=decision,
+                answer=rag_answer,
+                elapsed=time.perf_counter() - start_time,
+                initial_route=mode,
+                final_route=mode,
+                retry_count=0,
+            )
 
     def has_index(self) -> bool:
         with self._lock:
@@ -396,7 +505,7 @@ class RAGPipeline:
         final_route: str,
         retry_count: int,
     ) -> None:
-        index_stats = self.get_index_stats()
+        index_stats = self._last_auto_heal_status.get("index_stats", {})
         route_status = "refusal_recovered" if initial_route != final_route and not answer.refusal else (
             "refusal_persisted" if answer.refusal else "stable"
         )

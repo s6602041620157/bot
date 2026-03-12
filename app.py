@@ -366,15 +366,15 @@ if query:
 
 if st.session_state["messages"] and st.session_state["messages"][-1]["role"] == "user":
     last_query = st.session_state["messages"][-1]["content"]
-    with st.spinner('🤔 กำลังวิเคราะห์ข้อมูลและหาคำตอบ...'):
-        try:
-            history = _recent_history(st.session_state["messages"][:-1], turns=settings.memory_turns)
-            result = pipeline.ask(query=last_query, history=history)
-            st.session_state["messages"].append({
-                "role": "assistant", 
-                "content": result.answer_text, 
-                "citations": result.citations
-            })
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+    try:
+        history = _recent_history(st.session_state["messages"][:-1], turns=settings.memory_turns)
+        stream = pipeline.ask_stream(query=last_query, history=history)
+        full_response = st.write_stream(stream)
+        st.session_state["messages"].append({
+            "role": "assistant",
+            "content": full_response,
+            "citations": [],
+        })
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาด: {e}")
     st.rerun()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Generator
 
 from google import genai
 
@@ -46,6 +46,51 @@ class GeminiAnswerGenerator:
         refusal = answer_text == REFUSAL_MESSAGE
         return RAGAnswer(
             answer_text=answer_text,
+            citations=chunks,
+            grounded=not refusal,
+            refusal=refusal,
+        )
+
+    def generate_answer_stream(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        history: list[dict],
+        mode: str = "normal",
+        style_policy: str = "auto",
+    ) -> Generator[str, None, RAGAnswer]:
+        """Stream answer text chunk by chunk via Gemini streaming API.
+
+        Yields text chunks as they arrive. Returns the final RAGAnswer.
+        """
+        if not chunks:
+            yield REFUSAL_MESSAGE
+            return RAGAnswer(answer_text=REFUSAL_MESSAGE, citations=[], grounded=False, refusal=True)
+
+        prompt = build_generation_prompt(
+            query=query,
+            chunks=chunks,
+            history=history,
+            mode=mode,
+            style_policy=style_policy,
+        )
+        response = self.client.models.generate_content_stream(
+            model=self.model,
+            contents=prompt,
+            config={"temperature": self.temperature, "top_p": self.top_p},
+        )
+
+        collected: list[str] = []
+        for chunk in response:
+            text = _response_text(chunk)
+            if text:
+                collected.append(text)
+                yield text
+
+        full_text = "".join(collected).strip() or REFUSAL_MESSAGE
+        refusal = full_text == REFUSAL_MESSAGE
+        return RAGAnswer(
+            answer_text=full_text,
             citations=chunks,
             grounded=not refusal,
             refusal=refusal,
