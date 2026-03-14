@@ -107,15 +107,19 @@ class SequencedFakeGenerator:
         )
 
 
-def _settings(tmp_path: Path) -> Settings:
+def _settings(tmp_path: Path, **overrides: object) -> Settings:
     log_file = tmp_path / "logs" / "app.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    return Settings(
+    defaults = dict(
         gemini_api_key="test",
         pdf_dir=tmp_path / "data/pdfs",
         chroma_dir=tmp_path / "storage/chroma",
         log_file=log_file,
+        gate_skip_score=0.99,  # disable gate skipping in tests by default
+        gen_retry_on_refusal=0,
     )
+    defaults.update(overrides)
+    return Settings(**defaults)
 
 
 def test_ask_uses_fallback_when_pdf_score_gate_fails(tmp_path: Path) -> None:
@@ -214,7 +218,7 @@ def test_ask_retries_normal_mode_after_refusal_then_recovers(tmp_path: Path) -> 
     generator = SequencedFakeGenerator([REFUSAL_MESSAGE, "คำตอบหลัง retry"])
 
     pipeline = RAGPipeline(
-        settings=_settings(tmp_path),
+        settings=_settings(tmp_path, gen_retry_on_refusal=1),
         embedder=FakeEmbedder(),
         vector_store=FakeVectorStore(),
         retriever=FakeRetriever(pdf_chunks),
@@ -238,7 +242,7 @@ def test_ask_downgrades_to_partial_when_normal_stays_refusal(tmp_path: Path) -> 
     generator = SequencedFakeGenerator([REFUSAL_MESSAGE, REFUSAL_MESSAGE, "คำตอบแบบ partial"])
 
     pipeline = RAGPipeline(
-        settings=_settings(tmp_path),
+        settings=_settings(tmp_path, gen_retry_on_refusal=1),
         embedder=FakeEmbedder(),
         vector_store=FakeVectorStore(),
         retriever=FakeRetriever(pdf_chunks),
