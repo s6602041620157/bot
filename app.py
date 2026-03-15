@@ -369,7 +369,14 @@ if st.session_state["messages"] and st.session_state["messages"][-1]["role"] == 
     try:
         history = _recent_history(st.session_state["messages"][:-1], turns=settings.memory_turns)
         stream = pipeline.ask_stream(query=last_query, history=history)
-        full_response = st.write_stream(stream)
+        with st.spinner("กำลังคิด..."):
+            first_chunk = next(stream)
+
+        def _prepend_first(first, rest):
+            yield first
+            yield from rest
+
+        full_response = st.write_stream(_prepend_first(first_chunk, stream))
         st.session_state["messages"].append({
             "role": "assistant",
             "content": full_response,
