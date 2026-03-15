@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any, Generator
 
 from google import genai
@@ -190,9 +189,5 @@ def _response_text(response: Any) -> str:
                     parts.append(candidate_text)
         if parts:
             return "\n".join(parts)
-
-    if hasattr(response, "model_dump"):
-        dumped = response.model_dump()
-        return json.dumps(dumped, ensure_ascii=False)
 
     return ""
